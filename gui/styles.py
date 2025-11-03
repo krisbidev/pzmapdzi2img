@@ -5,7 +5,7 @@ Style constants for the GUI
 # Window settings
 WINDOW_MIN_WIDTH = 800
 WINDOW_MIN_HEIGHT = 600
-WINDOW_TITLE = "Kris' Amazing Map Image Generator"
+WINDOW_TITLE = "pzmapdzi2img - Map Image Generator"
 
 # Padding and spacing
 PAD_SMALL = 5
