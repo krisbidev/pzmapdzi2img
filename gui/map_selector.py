@@ -12,16 +12,18 @@ from . import styles
 class MapSelector:
     """Widget for selecting and ordering maps"""
     
-    def __init__(self, parent_frame, status_callback):
+    def __init__(self, parent_frame, status_callback, selection_changed_callback=None):
         """
         Initialize map selector widget
         
         Args:
             parent_frame: Parent tkinter frame
             status_callback: Function to call with status messages (message, type)
+            selection_changed_callback: Function to call when map selection changes
         """
         self.parent = parent_frame
         self.status_callback = status_callback
+        self.selection_changed_callback = selection_changed_callback
         self.map_items = []  # List of {name, path, info, enabled, var}
         
         # Create UI elements
@@ -56,13 +58,20 @@ class MapSelector:
         canvas.create_window((0, 0), window=self.map_list_frame, anchor=tk.NW)
         canvas.configure(yscrollcommand=scrollbar.set)
         
+        # Bind mousewheel scrolling
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        
         canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        # Order control buttons
+        # Control buttons (right side)
         button_frame = ttk.Frame(container)
         button_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(styles.PAD_MEDIUM, 0))
         
+        # Up button
         self.up_btn = ttk.Button(
             button_frame,
             text="↑ Up",
@@ -71,13 +80,35 @@ class MapSelector:
         )
         self.up_btn.pack(pady=(0, styles.PAD_SMALL))
         
+        # Down button
         self.down_btn = ttk.Button(
             button_frame,
             text="↓ Down",
             command=self.move_down,
             width=8
         )
-        self.down_btn.pack()
+        self.down_btn.pack(pady=(0, styles.PAD_MEDIUM))
+        
+        # Select All button
+        self.all_btn = ttk.Button(
+            button_frame,
+            text="All",
+            command=self._select_all_maps,
+            width=8
+        )
+        self.all_btn.pack(pady=(0, styles.PAD_SMALL))
+        
+        # Deselect All button
+        self.none_btn = ttk.Button(
+            button_frame,
+            text="None",
+            command=self._deselect_all_maps,
+            width=8
+        )
+        self.none_btn.pack()
+        
+        # Initially disable all buttons
+        self._set_buttons_state(tk.DISABLED)
         
         # Initially disable buttons
         self.up_btn.config(state=tk.DISABLED)
@@ -108,7 +139,13 @@ class MapSelector:
                 text="No maps found.",
                 foreground="gray"
             ).pack(pady=20)
+            self._set_buttons_state(tk.DISABLED)
             return
+        
+        # Enable buttons since we have maps
+        self._set_buttons_state(tk.NORMAL)
+        self.up_btn.config(state=tk.DISABLED)  # Initially disabled until selection
+        self.down_btn.config(state=tk.DISABLED)
         
         # Sort maps: base_top first, then others
         sorted_maps = []
@@ -147,14 +184,15 @@ class MapSelector:
         label_text = f"{name} ({w}×{h})"
         
         label = ttk.Label(item_frame, text=label_text)
-        label.pack(side=tk.LEFT, padx=(5, 0))
+        label.pack(side=tk.LEFT, padx=(5, 5), fill=tk.X, expand=True)
         
-        # Selection highlight (bind click to select)
+        # Selection highlight (bind click to select entire row)
         def select_item(event=None):
             self._select_item(idx)
         
         label.bind("<Button-1>", select_item)
         item_frame.bind("<Button-1>", select_item)
+        cb.bind("<Button-1>", lambda e: self._select_item(idx), add="+")
         
         # Store item data
         self.map_items.append({
@@ -164,7 +202,8 @@ class MapSelector:
             'enabled': True,
             'var': var,
             'frame': item_frame,
-            'label': label
+            'label': label,
+            'checkbox': cb
         })
     
     def _select_item(self, idx: int):
@@ -184,12 +223,21 @@ class MapSelector:
     
     def _on_selection_changed(self):
         """Handle checkbox state change"""
+        print("DEBUG: _on_selection_changed called")
         # Update enabled state
         for item in self.map_items:
             item['enabled'] = item['var'].get()
         
         enabled_count = sum(1 for item in self.map_items if item['enabled'])
         self.status_callback(f"{enabled_count} of {len(self.map_items)} map(s) selected", "info")
+        
+        # Notify parent that selection changed (for size estimate update)
+        print(f"DEBUG: callback is {self.selection_changed_callback}")
+        if self.selection_changed_callback:
+            print("DEBUG: Calling selection_changed_callback")
+            self.selection_changed_callback()
+        else:
+            print("DEBUG: No callback set")
     
     def move_up(self):
         """Move selected map up in the list"""
@@ -288,3 +336,24 @@ class MapSelector:
         # (For now, we'll always return None and let auto-ordering handle it)
         # TODO: Could implement custom ordering if needed
         return None
+    
+    def _select_all_maps(self):
+        """Select all map checkboxes"""
+        for item in self.map_items:
+            item['var'].set(True)
+            item['enabled'] = True
+        self._on_selection_changed()
+    
+    def _deselect_all_maps(self):
+        """Deselect all map checkboxes"""
+        for item in self.map_items:
+            item['var'].set(False)
+            item['enabled'] = False
+        self._on_selection_changed()
+    
+    def _set_buttons_state(self, state):
+        """Enable or disable all control buttons"""
+        self.up_btn.config(state=state)
+        self.down_btn.config(state=state)
+        self.all_btn.config(state=state)
+        self.none_btn.config(state=state)

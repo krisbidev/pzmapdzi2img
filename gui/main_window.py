@@ -7,6 +7,7 @@ import webbrowser
 from . import styles
 from .path_selector import PathSelector
 from .map_selector import MapSelector
+from .layer_level_selector import LayerLevelSelector
 
 
 class MainWindow:
@@ -21,6 +22,9 @@ class MainWindow:
         # Center window on screen
         self._center_window()
         
+        # Initialize state
+        self.all_maps = {}
+        
         # Create UI elements (status bar first so path_selector can use it)
         self.create_menu()
         self.create_status_bar()
@@ -33,7 +37,7 @@ class MainWindow:
         """Center the window on screen"""
         self.root.update_idletasks()
         width = styles.WINDOW_MIN_WIDTH
-        height = styles.WINDOW_MIN_HEIGHT
+        height = styles.WINDOW_MIN_HEIGHT + 50  # Add a bit more than minimum to avoid snap
         x = (self.root.winfo_screenwidth() // 2) - (width // 2)
         y = (self.root.winfo_screenheight() // 2) - (height // 2)
         self.root.geometry(f'{width}x{height}+{x}+{y}')
@@ -78,8 +82,27 @@ class MainWindow:
         )
         self.middle_frame.pack(fill=tk.BOTH, expand=True, pady=(0, styles.PAD_MEDIUM))
         
-        # Add map selector widget
-        self.map_selector = MapSelector(self.middle_frame, self.update_status)
+        # Create a horizontal split: maps on left, layers on right
+        maps_layers_frame = ttk.Frame(self.middle_frame)
+        maps_layers_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Left side: Map selector
+        maps_frame = ttk.Frame(maps_layers_frame)
+        maps_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, styles.PAD_SMALL))
+        self.map_selector = MapSelector(maps_frame, self.update_status, self.on_map_selection_changed)
+        
+        # Right side: Layer selector
+        layers_frame = ttk.Frame(maps_layers_frame)
+        layers_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(styles.PAD_SMALL, 0))
+        self.layer_level_selector = LayerLevelSelector(layers_frame, self.update_status)
+        
+        # Separator
+        ttk.Separator(self.middle_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=styles.PAD_MEDIUM)
+        
+        # Level selector below the map/layer split
+        level_frame = ttk.Frame(self.middle_frame)
+        level_frame.pack(fill=tk.X)
+        self.layer_level_selector.create_level_selector(level_frame)
         
         # Bottom section: Action buttons
         self.bottom_frame = ttk.Frame(main_frame, padding=styles.PAD_MEDIUM)
@@ -131,6 +154,35 @@ class MainWindow:
     def on_maps_discovered(self, maps):
         """Callback when maps are discovered by path selector"""
         self.map_selector.populate_maps(maps)
+        
+        # Store all maps for later filtering
+        self.all_maps = maps
+        
+        # Update layer/level selector with all maps initially
+        maps_list = [{'path': data['path'], 'info': data['info']} 
+                     for data in maps.values()]
+        self.layer_level_selector.set_maps(maps_list)
+    
+    def on_map_selection_changed(self):
+        """Callback when map selection changes (checkbox toggled)"""
+        print(f"DEBUG: on_map_selection_changed called, all_maps has {len(self.all_maps)} items")
+        
+        # Get only the selected maps
+        selected_map_paths = self.map_selector.get_selected_maps()
+        print(f"DEBUG: Selected {len(selected_map_paths)} maps")
+        
+        # Convert to the format expected by layer_level_selector
+        selected_maps_list = []
+        for map_name, map_data in self.all_maps.items():
+            if map_data['path'] in selected_map_paths:
+                selected_maps_list.append({
+                    'path': map_data['path'],
+                    'info': map_data['info']
+                })
+        
+        print(f"DEBUG: Updating estimate with {len(selected_maps_list)} maps")
+        # Update size estimate with only selected maps
+        self.layer_level_selector.update_maps_for_estimate(selected_maps_list)
     
     def show_about(self):
         """Show About dialog"""
