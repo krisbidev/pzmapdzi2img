@@ -8,6 +8,8 @@ with different positions and dimensions in world space.
 from pathlib import Path
 from typing import List, Dict, Any
 from .map_info import read_map_info
+from .dzi_parser import parse_dzi
+from .pyramid import get_max_level
 
 
 def calculate_global_bounds(map_paths: List[Path], layer: int = 0) -> Dict[str, Any]:
@@ -35,15 +37,31 @@ def calculate_global_bounds(map_paths: List[Path], layer: int = 0) -> Dict[str, 
     if not map_paths:
         raise ValueError("No map paths provided")
     
-    # Load all map metadata
+    # Load all map metadata and determine max levels
     maps_data = []
+    max_levels = []
+    
     for map_path in map_paths:
         try:
             info = read_map_info(map_path)
+            
+            # Get this map's max level
+            dzi_file = map_path / f"layer{layer}.dzi"
+            dzi_info = parse_dzi(dzi_file)
+            max_level = get_max_level(dzi_info['width'], dzi_info['height'])
+            max_levels.append(max_level)
+            
+            # x0/y0 are negative world coordinates - negate to get actual position
+            world_x = -info['x0']
+            world_y = -info['y0']
+            
             maps_data.append({
                 'name': map_path.name,
                 'path': map_path,
-                'info': info
+                'info': info,
+                'world_x': world_x,
+                'world_y': world_y,
+                'max_level': max_level
             })
         except FileNotFoundError:
             raise FileNotFoundError(f"map_info.json not found in {map_path}")
@@ -51,11 +69,15 @@ def calculate_global_bounds(map_paths: List[Path], layer: int = 0) -> Dict[str, 
     if not maps_data:
         raise ValueError("No valid maps found")
     
+    # Find the highest max level among all maps
+    highest_max_level = max(max_levels)
+    
     # Calculate global bounding box
-    min_x = min(m['info']['x0'] for m in maps_data)
-    min_y = min(m['info']['y0'] for m in maps_data)
-    max_x = max(m['info']['x0'] + m['info']['w'] for m in maps_data)
-    max_y = max(m['info']['y0'] + m['info']['h'] for m in maps_data)
+    # Note: w/h are already in world coordinate space - no normalization needed
+    min_x = min(m['world_x'] for m in maps_data)
+    min_y = min(m['world_y'] for m in maps_data)
+    max_x = max(m['world_x'] + m['info']['w'] for m in maps_data)
+    max_y = max(m['world_y'] + m['info']['h'] for m in maps_data)
     
     global_width = max_x - min_x
     global_height = max_y - min_y
@@ -63,16 +85,19 @@ def calculate_global_bounds(map_paths: List[Path], layer: int = 0) -> Dict[str, 
     # Calculate offset for each map (where it should be placed in global canvas)
     maps_with_offsets = []
     for m in maps_data:
-        offset_x = m['info']['x0'] - min_x
-        offset_y = m['info']['y0'] - min_y
+        offset_x = m['world_x'] - min_x
+        offset_y = m['world_y'] - min_y
         maps_with_offsets.append({
             'name': m['name'],
             'x0': m['info']['x0'],
             'y0': m['info']['y0'],
+            'world_x': m['world_x'],
+            'world_y': m['world_y'],
             'w': m['info']['w'],
             'h': m['info']['h'],
             'offset_x': offset_x,
-            'offset_y': offset_y
+            'offset_y': offset_y,
+            'max_level': m['max_level']
         })
     
     return {
@@ -97,8 +122,10 @@ def get_map_offset(map_info: Dict[str, Any], global_bounds: Dict[str, Any]) -> t
     Returns:
         Tuple of (offset_x, offset_y) in pixels
     """
-    offset_x = map_info['x0'] - global_bounds['min_x']
-    offset_y = map_info['y0'] - global_bounds['min_y']
+    world_x = -map_info['x0']
+    world_y = -map_info['y0']
+    offset_x = world_x - global_bounds['min_x']
+    offset_y = world_y - global_bounds['min_y']
     return (offset_x, offset_y)
 
 
