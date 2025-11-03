@@ -1,0 +1,13 @@
+# Map Image Generator - Dependencies
+# Python 3.8+
+
+# Image processing (includes WebP support)
+Pillow>=10.0.0
+
+# GUI framework (usually included with Python, but listed for completeness)
+# tkinter is part of Python standard library on Windows
+# If missing, install Python with tcl/tk support
+
+# Optional: For future enhancements
+# numpy>=1.24.0  # Fast array operations (if needed for performance)
+# tqdm>=4.65.0   # Progress bars (if needed for CLI mode)
