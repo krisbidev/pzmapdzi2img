@@ -181,10 +181,11 @@ class PathSelector:
     
     def set_buttons_state(self, enabled):
         """
-        Enable or disable browse button.
+        Enable or disable browse button and path entry.
         
         Args:
             enabled: True to enable, False to disable
         """
         state = tk.NORMAL if enabled else tk.DISABLED
         self.browse_btn.config(state=state)
+        self.path_entry.config(state=state)

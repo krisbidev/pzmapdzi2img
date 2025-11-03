@@ -4,7 +4,7 @@ Style constants for the GUI
 
 # Window settings
 WINDOW_MIN_WIDTH = 800
-WINDOW_MIN_HEIGHT = 700
+WINDOW_MIN_HEIGHT = 780
 WINDOW_TITLE = "pzmapdzi2img - Map Image Generator"
 
 # Padding and spacing

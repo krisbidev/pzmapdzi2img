@@ -352,8 +352,12 @@ class MapSelector:
         self._on_selection_changed()
     
     def _set_buttons_state(self, state):
-        """Enable or disable all control buttons"""
+        """Enable or disable all control buttons and checkboxes"""
         self.up_btn.config(state=state)
         self.down_btn.config(state=state)
         self.all_btn.config(state=state)
         self.none_btn.config(state=state)
+        
+        # Also disable/enable all map checkboxes
+        for item in self.map_items:
+            item['checkbox'].config(state=state)

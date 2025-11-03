@@ -266,8 +266,11 @@ class LayerLevelSelector:
             self.status_callback("All layers deselected", "info")
     
     def _set_layer_controls_state(self, state):
-        """Enable or disable all layer controls"""
+        """Enable or disable all layer controls and level slider"""
         self.all_layers_btn.config(state=state)
         self.none_layers_btn.config(state=state)
         for cb in self.layer_checkboxes:
             cb.config(state=state)
+        # Also disable the zoom level slider
+        if hasattr(self, 'level_scale'):
+            self.level_scale.config(state=state)

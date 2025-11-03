@@ -59,16 +59,14 @@ class OutputConfig:
         
         self.path_entry = ttk.Entry(
             path_frame,
-            textvariable=self.output_path_var,
-            state=tk.DISABLED
+            textvariable=self.output_path_var
         )
         self.path_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=styles.PAD_SMALL)
         
         self.browse_button = ttk.Button(
             path_frame,
             text="Browse...",
-            command=self._browse_output_path,
-            state=tk.DISABLED
+            command=self._browse_output_path
         )
         self.browse_button.pack(side=tk.LEFT)
         
@@ -91,8 +89,7 @@ class OutputConfig:
             text="PNG",
             variable=self.format_var,
             value="PNG",
-            command=self._on_format_changed,
-            state=tk.DISABLED
+            command=self._on_format_changed
         )
         self.png_radio.pack(side=tk.LEFT, padx=(0, styles.PAD_MEDIUM))
         
@@ -101,8 +98,7 @@ class OutputConfig:
             text="JPEG",
             variable=self.format_var,
             value="JPEG",
-            command=self._on_format_changed,
-            state=tk.DISABLED
+            command=self._on_format_changed
         )
         self.jpeg_radio.pack(side=tk.LEFT, padx=(0, styles.PAD_MEDIUM))
         
@@ -111,8 +107,7 @@ class OutputConfig:
             text="WebP",
             variable=self.format_var,
             value="WEBP",
-            command=self._on_format_changed,
-            state=tk.DISABLED
+            command=self._on_format_changed
         )
         self.webp_radio.pack(side=tk.LEFT)
         
@@ -134,8 +129,7 @@ class OutputConfig:
             to=100,
             orient=tk.HORIZONTAL,
             variable=self.quality_var,
-            command=self._on_quality_changed,
-            state=tk.DISABLED
+            command=self._on_quality_changed
         )
         self.quality_slider.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=styles.PAD_SMALL)
         
@@ -260,13 +254,12 @@ class OutputConfig:
         """
         state = tk.NORMAL if enabled else tk.DISABLED
         
+        self.path_entry.config(state=state)
         self.browse_button.config(state=state)
         self.png_radio.config(state=state)
         self.jpeg_radio.config(state=state)
         self.webp_radio.config(state=state)
-        
-        if self.format_var.get() == "JPEG":
-            self.quality_slider.config(state=state)
+        self.quality_slider.config(state=state)
         
         # Don't enable generate button here - use enable_generate() instead
     

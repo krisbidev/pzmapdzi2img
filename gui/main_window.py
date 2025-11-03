@@ -122,6 +122,10 @@ class MainWindow:
             status_callback=self.update_status,
             on_generate_callback=self.on_generate_image
         )
+        
+        # Initially disable output controls until maps are loaded
+        self.output_config.enable_controls(False)
+        self.output_config.enable_generate(False)
     
     def create_status_bar(self):
         """Create the status bar at the bottom"""
