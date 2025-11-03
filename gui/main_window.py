@@ -4,10 +4,14 @@ Main GUI window for Project Zomboid Map Stitcher
 import tkinter as tk
 from tkinter import ttk, messagebox
 import webbrowser
+import threading
+from pathlib import Path
 from . import styles
 from .path_selector import PathSelector
 from .map_selector import MapSelector
 from .layer_level_selector import LayerLevelSelector
+from .output_config import OutputConfig
+from map_image_generator.stitcher import stitch_multi_map
 
 
 class MainWindow:
@@ -24,6 +28,7 @@ class MainWindow:
         
         # Initialize state
         self.all_maps = {}
+        self.is_generating = False
         
         # Create UI elements (status bar first so path_selector can use it)
         self.create_menu()
@@ -104,16 +109,19 @@ class MainWindow:
         level_frame.pack(fill=tk.X)
         self.layer_level_selector.create_level_selector(level_frame)
         
-        # Bottom section: Action buttons
+        # Separator
+        ttk.Separator(self.middle_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=styles.PAD_MEDIUM)
+        
+        # Bottom section: Output configuration
         self.bottom_frame = ttk.Frame(main_frame, padding=styles.PAD_MEDIUM)
         self.bottom_frame.pack(fill=tk.X)
         
-        # Placeholder button
-        ttk.Button(
+        # Output configuration widget
+        self.output_config = OutputConfig(
             self.bottom_frame,
-            text="Generate Image",
-            state=tk.DISABLED
-        ).pack(side=tk.RIGHT)
+            status_callback=self.update_status,
+            on_generate_callback=self.on_generate_image
+        )
     
     def create_status_bar(self):
         """Create the status bar at the bottom"""
@@ -162,6 +170,10 @@ class MainWindow:
         maps_list = [{'path': data['path'], 'info': data['info']} 
                      for data in maps.values()]
         self.layer_level_selector.set_maps(maps_list)
+        
+        # Enable output controls when maps are available
+        self.output_config.enable_controls(True)
+        self._check_generate_button_state()
     
     def on_map_selection_changed(self):
         """Callback when map selection changes (checkbox toggled)"""
@@ -183,6 +195,203 @@ class MainWindow:
         print(f"DEBUG: Updating estimate with {len(selected_maps_list)} maps")
         # Update size estimate with only selected maps
         self.layer_level_selector.update_maps_for_estimate(selected_maps_list)
+        
+        # Check if Generate button should be enabled
+        self._check_generate_button_state()
+    
+    def _check_generate_button_state(self):
+        """Enable Generate button only if valid configuration exists"""
+        # Check if we have maps selected
+        selected_maps = self.map_selector.get_selected_maps()
+        
+        # Check if we have layers selected
+        selected_layers = self.layer_level_selector.get_layers()
+        
+        # Check if output path is set
+        output_path = self.output_config.get_output_path()
+        
+        # Enable only if all conditions met
+        can_generate = (
+            len(selected_maps) > 0 and
+            len(selected_layers) > 0 and
+            output_path is not None and
+            not self.is_generating
+        )
+        
+        self.output_config.enable_generate(can_generate)
+    
+    def on_generate_image(self):
+        """Handle Generate Image button click"""
+        # Collect all parameters
+        selected_map_paths = self.map_selector.get_selected_maps()
+        selected_layers = self.layer_level_selector.get_layers()
+        selected_level = self.layer_level_selector.get_level()
+        output_path = self.output_config.get_output_path()
+        output_format = self.output_config.get_format()
+        jpeg_quality = self.output_config.get_quality()
+        
+        # Validation (should already be done, but double-check)
+        if not selected_map_paths:
+            self.update_status("Please select at least one map", "error")
+            return
+        
+        if not selected_layers:
+            self.update_status("Please select at least one layer", "error")
+            return
+        
+        if not output_path:
+            self.update_status("Please specify an output path", "error")
+            return
+        
+        # Confirm if file exists
+        if output_path.exists():
+            response = messagebox.askyesno(
+                "Overwrite File?",
+                f"File already exists:\n{output_path}\n\nOverwrite it?",
+                parent=self.root
+            )
+            if not response:
+                return
+        
+        # Disable controls during generation
+        self.is_generating = True
+        self._set_all_controls_state(False)
+        
+        # Start generation in background thread
+        self.update_status("Generating image...", "info")
+        
+        thread = threading.Thread(
+            target=self._generate_image_thread,
+            args=(selected_map_paths, selected_layers, selected_level, 
+                  output_path, output_format, jpeg_quality)
+        )
+        thread.daemon = True
+        thread.start()
+    
+    def _generate_image_thread(self, map_paths, layers, level, output_path, 
+                              output_format, jpeg_quality):
+        """
+        Run image generation in background thread.
+        
+        This prevents the GUI from freezing during long operations.
+        Generates a single image with all selected layers combined.
+        """
+        try:
+            from PIL import Image
+            from map_image_generator.bounds import calculate_global_bounds
+            
+            # Update status
+            self.root.after(
+                0,
+                self.update_status,
+                f"Generating image with {len(layers)} layer(s)...",
+                "info"
+            )
+            
+            # Calculate global bounds once (using first layer for reference)
+            bounds = calculate_global_bounds(map_paths, layers[0])
+            
+            # Determine canvas size (using stitcher's internal logic)
+            from map_image_generator.stitcher import _calculate_map_levels
+            map_levels = _calculate_map_levels(map_paths, layers[0], level)
+            scale_factor = map_levels['scale_factor']
+            canvas_width = int(bounds['width'] * scale_factor)
+            canvas_height = int(bounds['height'] * scale_factor)
+            
+            # Create combined canvas
+            combined_image = Image.new('RGBA', (canvas_width, canvas_height), (0, 0, 0, 0))
+            
+            # Stitch each layer onto the same canvas
+            for layer_idx, layer in enumerate(layers, 1):
+                self.root.after(
+                    0,
+                    self.update_status,
+                    f"Processing layer {layer} ({layer_idx}/{len(layers)})...",
+                    "info"
+                )
+                
+                # Generate this layer to a temporary image
+                from map_image_generator.stitcher import _stitch_map_onto_canvas
+                
+                # Stitch all maps for this layer
+                for map_path in map_paths:
+                    _stitch_map_onto_canvas(
+                        output_image=combined_image,
+                        map_path=map_path,
+                        layer=layer,
+                        map_levels=map_levels,
+                        bounds=bounds,
+                        scale_factor=scale_factor
+                    )
+            
+            # Save the combined image
+            self.root.after(
+                0,
+                self.update_status,
+                "Saving image...",
+                "info"
+            )
+            
+            from map_image_generator.stitcher import _save_image
+            _save_image(combined_image, output_path, output_format)
+            
+            # Success!
+            message = f"Image saved to {output_path}"
+            self.root.after(0, self._generation_complete, True, message)
+            
+        except Exception as e:
+            # Error occurred
+            error_msg = f"Generation failed: {str(e)}"
+            self.root.after(0, self._generation_complete, False, error_msg)
+    
+    def _generation_complete(self, success, message):
+        """
+        Called when generation completes (success or failure).
+        
+        Args:
+            success: True if generation succeeded
+            message: Status message to display
+        """
+        # Re-enable controls
+        self.is_generating = False
+        self._set_all_controls_state(True)
+        
+        # Update status
+        status_type = "success" if success else "error"
+        self.update_status(message, status_type)
+        
+        # Show message box for important notifications
+        if success:
+            messagebox.showinfo("Success", message, parent=self.root)
+        else:
+            messagebox.showerror("Error", message, parent=self.root)
+    
+    def _set_all_controls_state(self, enabled):
+        """
+        Enable or disable all controls (during generation).
+        
+        Args:
+            enabled: True to enable, False to disable
+        """
+        # Path selector
+        self.path_selector.set_buttons_state(enabled)
+        
+        # Map selector
+        self.map_selector._set_buttons_state(tk.NORMAL if enabled else tk.DISABLED)
+        
+        # Layer/level selector
+        self.layer_level_selector._set_layer_controls_state(
+            tk.NORMAL if enabled else tk.DISABLED
+        )
+        
+        # Output config
+        self.output_config.enable_controls(enabled)
+        
+        # Generate button specifically
+        if enabled:
+            self._check_generate_button_state()
+        else:
+            self.output_config.enable_generate(False)
     
     def show_about(self):
         """Show About dialog"""

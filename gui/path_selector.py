@@ -178,3 +178,13 @@ class PathSelector:
     def get_discovered_maps(self) -> Dict[str, Dict[str, Any]]:
         """Get the discovered maps dictionary"""
         return self.discovered_maps
+    
+    def set_buttons_state(self, enabled):
+        """
+        Enable or disable browse button.
+        
+        Args:
+            enabled: True to enable, False to disable
+        """
+        state = tk.NORMAL if enabled else tk.DISABLED
+        self.browse_btn.config(state=state)
