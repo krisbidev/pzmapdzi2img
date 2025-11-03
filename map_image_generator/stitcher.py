@@ -107,7 +107,8 @@ def stitch_multi_map(
     layer: int,
     level: int,
     output_path: Union[str, Path],
-    format: str = None
+    format: str = None,
+    map_order: List[int] = None
 ) -> Path:
     """
     Stitch multiple maps together into a single image.
@@ -120,12 +121,35 @@ def stitch_multi_map(
         level: Zoom level (0 = smallest, max_level = full resolution)
         output_path: Where to save the stitched image
         format: Output format ('PNG', 'JPEG', 'WEBP'). Auto-detected if None.
+        map_order: List of indices specifying stitch order (e.g., [1, 0, 2]).
+                   If None, auto-orders: base map first, then others.
         
     Returns:
         Path to the saved output file
     """
     map_paths = [Path(p) for p in map_paths]
     output_path = Path(output_path)
+    
+    # Apply map ordering
+    if map_order is not None:
+        if not all(0 <= i < len(map_paths) for i in map_order):
+            raise ValueError(f"Invalid map_order indices. Must be 0-{len(map_paths)-1}")
+        map_paths = [map_paths[i] for i in map_order]
+    else:
+        # Default: base map first, then others
+        base_path = None
+        others = []
+        for p in map_paths:
+            path_str = str(p).lower()
+            if 'base_top' in path_str and 'mod_maps' not in path_str:
+                base_path = p
+            else:
+                others.append(p)
+        
+        if base_path:
+            map_paths = [base_path] + others
+        else:
+            map_paths = others  # No base map found, use original order
     
     # Validate maps exist
     for map_path in map_paths:
