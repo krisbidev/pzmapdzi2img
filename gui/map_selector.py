@@ -71,12 +71,28 @@ class MapSelector:
         button_frame = ttk.Frame(container)
         button_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(styles.PAD_MEDIUM, 0))
         
+        # Move buttons section
+        move_label = ttk.Label(
+            button_frame,
+            text="Move"
+        )
+        move_label.pack(pady=(0, styles.PAD_SMALL))
+        
+        # Top button
+        self.top_btn = ttk.Button(
+            button_frame,
+            text="⤒ Top",
+            command=self.move_to_top,
+            width=10
+        )
+        self.top_btn.pack(pady=(0, styles.PAD_SMALL))
+        
         # Up button
         self.up_btn = ttk.Button(
             button_frame,
             text="↑ Up",
             command=self.move_up,
-            width=8
+            width=10
         )
         self.up_btn.pack(pady=(0, styles.PAD_SMALL))
         
@@ -85,16 +101,32 @@ class MapSelector:
             button_frame,
             text="↓ Down",
             command=self.move_down,
-            width=8
+            width=10
         )
-        self.down_btn.pack(pady=(0, styles.PAD_MEDIUM))
+        self.down_btn.pack(pady=(0, styles.PAD_SMALL))
+        
+        # Bottom button
+        self.bottom_btn = ttk.Button(
+            button_frame,
+            text="⭳ Bottom",
+            command=self.move_to_bottom,
+            width=10
+        )
+        self.bottom_btn.pack(pady=(0, styles.PAD_MEDIUM))
+        
+        # Select buttons section
+        select_label = ttk.Label(
+            button_frame,
+            text="Select"
+        )
+        select_label.pack(pady=(0, styles.PAD_SMALL))
         
         # Select All button
         self.all_btn = ttk.Button(
             button_frame,
             text="All",
             command=self._select_all_maps,
-            width=8
+            width=10
         )
         self.all_btn.pack(pady=(0, styles.PAD_SMALL))
         
@@ -103,7 +135,7 @@ class MapSelector:
             button_frame,
             text="None",
             command=self._deselect_all_maps,
-            width=8
+            width=10
         )
         self.none_btn.pack()
         
@@ -113,6 +145,8 @@ class MapSelector:
         # Initially disable buttons
         self.up_btn.config(state=tk.DISABLED)
         self.down_btn.config(state=tk.DISABLED)
+        self.top_btn.config(state=tk.DISABLED)
+        self.bottom_btn.config(state=tk.DISABLED)
         
         # Placeholder message
         ttk.Label(
@@ -146,6 +180,8 @@ class MapSelector:
         self._set_buttons_state(tk.NORMAL)
         self.up_btn.config(state=tk.DISABLED)  # Initially disabled until selection
         self.down_btn.config(state=tk.DISABLED)
+        self.top_btn.config(state=tk.DISABLED)
+        self.bottom_btn.config(state=tk.DISABLED)
         
         # Sort maps: base_top first, then others
         sorted_maps = []
@@ -220,6 +256,8 @@ class MapSelector:
             # Enable/disable buttons based on position
             self.up_btn.config(state=tk.NORMAL if idx > 0 else tk.DISABLED)
             self.down_btn.config(state=tk.NORMAL if idx < len(self.map_items) - 1 else tk.DISABLED)
+            self.top_btn.config(state=tk.NORMAL if idx > 0 else tk.DISABLED)
+            self.bottom_btn.config(state=tk.NORMAL if idx < len(self.map_items) - 1 else tk.DISABLED)
     
     def _on_selection_changed(self):
         """Handle checkbox state change"""
@@ -277,6 +315,44 @@ class MapSelector:
         # Update selection
         self._select_item(idx + 1)
     
+    def move_to_top(self):
+        """Move selected map to the top of the list"""
+        if not hasattr(self, 'selected_idx'):
+            return
+        
+        idx = self.selected_idx
+        if idx <= 0:
+            return
+        
+        # Remove item from current position and insert at top
+        item = self.map_items.pop(idx)
+        self.map_items.insert(0, item)
+        
+        # Rebuild UI
+        self._rebuild_ui()
+        
+        # Update selection
+        self._select_item(0)
+    
+    def move_to_bottom(self):
+        """Move selected map to the bottom of the list"""
+        if not hasattr(self, 'selected_idx'):
+            return
+        
+        idx = self.selected_idx
+        if idx >= len(self.map_items) - 1:
+            return
+        
+        # Remove item from current position and insert at bottom
+        item = self.map_items.pop(idx)
+        self.map_items.append(item)
+        
+        # Rebuild UI
+        self._rebuild_ui()
+        
+        # Update selection
+        self._select_item(len(self.map_items) - 1)
+    
     def _rebuild_ui(self):
         """Rebuild the UI after reordering"""
         # Clear frames
@@ -315,6 +391,7 @@ class MapSelector:
             # Update stored references
             item['frame'] = item_frame
             item['label'] = label
+            item['checkbox'] = cb
     
     def get_selected_maps(self) -> List[Any]:
         """
@@ -355,6 +432,8 @@ class MapSelector:
         """Enable or disable all control buttons and checkboxes"""
         self.up_btn.config(state=state)
         self.down_btn.config(state=state)
+        self.top_btn.config(state=state)
+        self.bottom_btn.config(state=state)
         self.all_btn.config(state=state)
         self.none_btn.config(state=state)
         
